@@ -66,34 +66,22 @@ flowchart TD
 
 #### 步骤一：克隆代码仓库
 ```bash
-git clone https://github.com/Luofeng-Cloud/hermes-web-remote.git
-cd hermes-web-remote
+git clone https://github.com/Luofeng-Cloud/Hermes-Web-Remote.git
+cd Hermes-Web-Remote
 ```
 
-#### 步骤二：启动本地服务
-- **Windows 用户**：
-  直接双击执行根目录下的 `启动网站.bat`，或在命令行运行：
-  ```cmd
-  pythonw server.py
-  ```
+#### 步骤二：一键启动服务与安全穿透
+- **Windows 用户 (推荐)**：
+  直接双击根目录下的 **`启动网站.bat`**。
+  *(脚本将自动嗅探 Python 核心、后台静默拉起服务，并**全自动配置打通 Tailscale 隧道**，直接在窗口屏幕高亮回显你的手机专属访问链接，无需任何手动命令行操作！)*
 - **Linux / macOS 用户**：
   ```bash
   python3 server.py
+  tailscale serve --bg --set-path /app http://127.0.0.1:9220
   ```
-*(服务将在本地 `127.0.0.1:9220` 静默运行)*
 
-#### 步骤三：绑定 Tailscale 隧道 (仅需执行一次)
-在本地终端中运行以下命令，将本地服务映射到你的私有 Tailscale 节点：
-```bash
-tailscale serve --bg --set-path /app http://127.0.0.1:9220
-```
-命令完成后，终端将输出专属访问路径，格式通常为：
-```text
-https://<Your-Machine-Name>.<Your-Tailnet-Name>.ts.net/app
-```
-
-#### 步骤四：手机端访问
-在手机浏览器（Safari / Chrome）中打开上述专属链接，输入 Hermes 面板设置的用户名与密码即可登录使用。
+#### 步骤三：手机端直接访问
+在手机浏览器（Safari / Chrome）中打开终端窗口输出的专属 HTTPS 链接，输入 Hermes 面板设置的密码即可登录开始对话！
 
 ---
 

@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================================
-rem  Hermes Web Remote - 自适应启动脚本
+rem  Hermes Web Remote - 全自动自适应启动脚本 (集成 Tailscale 自动穿透)
 rem ============================================================================
 chcp 936 >nul
 cd /d "%~dp0"
@@ -66,45 +66,57 @@ echo %~1 | findstr /i "WindowsApps" >nul
 if errorlevel 1 set "PY_EXE=%~1"
 exit /b 0
 
-:already_running
-echo.
-echo ============================================================================
-echo  [提示] Hermes 远程 Web 服务已经在运行中 [端口: 9220]
-echo  本地测试地址: http://127.0.0.1:9220
-echo.
-echo  【手机远程连接提示】
-echo  若未开启外网穿透，请在终端执行:
-echo    tailscale serve --bg --set-path /app http://127.0.0.1:9220
-echo.
-echo  随后在手机浏览器打开终端给出的专属 HTTPS 链接即可直接使用。
-echo ============================================================================
-echo.
-timeout /t 5 >nul 2>&1 || ping -n 6 127.0.0.1 >nul
-exit /b 0
-
 :found_python
 echo [3/3] 检测到 Python 核心: %PY_EXE%
 echo 正在后台静默拉起 server.py...
 start "" "%PY_EXE%" "%~dp0server.py"
 
 rem 等待 2 秒验活
-timeout /t 2 /nobreak >nul 2>&1 || ping -n 3 127.0.0.1 >nul
+ping -n 3 127.0.0.1 >nul
 netstat -ano 2>nul | findstr ":9220 " | findstr "LISTENING" >nul
 if errorlevel 1 goto :start_warn
 
+goto :show_success
+
+:already_running
+echo.
+echo [提示] Hermes 远程 Web 服务已经在运行中 [端口: 9220]
+
+:show_success
+rem 探测并配置 Tailscale 自动穿透
+set TS_EXE=
+where tailscale >nul 2>&1 && set "TS_EXE=tailscale"
+if not defined TS_EXE (
+    if exist "%ProgramFiles%\Tailscale\tailscale.exe" set "TS_EXE=%ProgramFiles%\Tailscale\tailscale.exe"
+)
+if not defined TS_EXE (
+    if exist "%ProgramFiles(x86)%\Tailscale\tailscale.exe" set "TS_EXE=%ProgramFiles(x86)%\Tailscale\tailscale.exe"
+)
+
 echo.
 echo ============================================================================
-echo  Hermes 远程 Web 服务已成功在后台静默运行！
+echo  Hermes 远程 Web 服务运行正常！
 echo  本地测试地址: http://127.0.0.1:9220
 echo.
-echo  【手机远程连接提示】
-echo  请在终端执行以下命令开启 Tailscale 安全隧道:
-echo    tailscale serve --bg --set-path /app http://127.0.0.1:9220
-echo.
-echo  随后在手机浏览器打开终端给出的专属 HTTPS 链接即可直接使用。
+
+if not defined TS_EXE goto :no_tailscale
+
+echo  【手机专属访问链接 - Tailscale 安全穿透】
+echo  正在自动更新并打通 Tailscale 隧道通道:
+echo ----------------------------------------------------------------------------
+"%TS_EXE%" serve --bg --set-path /app http://127.0.0.1:9220
+echo ----------------------------------------------------------------------------
+echo  请在手机浏览器 [Safari 或 Chrome] 直接打开上方给出的专属 HTTPS 链接即可！
+goto :after_tailscale
+
+:no_tailscale
+echo  [提示] 未检测到 Tailscale 客户端，当前仅可通过本机或局域网访问。
+echo  若需手机外出远程使用，请在电脑与手机上安装并登录 Tailscale。
+
+:after_tailscale
 echo ============================================================================
 echo.
-timeout /t 5 >nul 2>&1 || ping -n 6 127.0.0.1 >nul
+timeout /t 8 >nul 2>&1 || ping -n 9 127.0.0.1 >nul
 exit /b 0
 
 :start_warn
