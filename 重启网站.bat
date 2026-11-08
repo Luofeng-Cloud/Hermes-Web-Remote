@@ -1,18 +1,13 @@
 @echo off
 rem ============================================================================
-rem  Hermes Web Remote - 重启服务
+rem  Hermes Web Remote - 智能重启脚本
 rem ============================================================================
+chcp 936 >nul
 cd /d "%~dp0"
-set PYTHONPATH=%~dp0
 
-echo 正在重启 Hermes 远程 Web 服务...
-python "%~dp0server.py" --stop >nul 2>&1
-timeout /t 1 /nobreak >nul
-start "" pythonw "%~dp0server.py"
+echo [1/2] 正在停止旧服务...
+call "%~dp0停止网站.bat" >nul 2>&1
+timeout /t 1 /nobreak >nul 2>&1 || ping -n 2 127.0.0.1 >nul
 
-echo.
-echo ============================================================================
-echo  Hermes 远程 Web 服务已重新启动！(端口: 9220)
-echo ============================================================================
-echo.
-timeout /t 3 >nul
+echo [2/2] 正在拉起新服务...
+call "%~dp0启动网站.bat"
