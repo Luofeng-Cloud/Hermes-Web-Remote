@@ -73,7 +73,7 @@ cd Hermes-Web-Remote
 #### 步骤二：一键启动服务与安全穿透
 - **Windows 用户 (推荐)**：
   直接双击根目录下的 **`启动网站.bat`**。
-  *(脚本将自动嗅探 Python 核心、后台静默拉起服务，并**全自动配置打通 Tailscale 隧道**，直接在窗口屏幕高亮回显你的手机专属访问链接，无需任何手动命令行操作！)*
+  *(脚本将自动嗅探 Python 核心、后台静默拉起服务，并**全自动配置打通 Tailscale 隧道**；同时自动初始化凭据并在屏幕高亮回显手机专属访问链接与登录账号密码，真正 0 门槛开箱即用！)*
 - **Linux / macOS 用户**：
   ```bash
   python3 server.py
@@ -81,19 +81,22 @@ cd Hermes-Web-Remote
   ```
 
 #### 步骤三：手机端直接访问
-在手机浏览器（Safari / Chrome）中打开终端窗口输出的专属 HTTPS 链接，输入 Hermes 面板设置的密码即可登录开始对话！
+在手机浏览器（Safari / Chrome）中打开终端窗口输出的专属 HTTPS 链接：
+- **默认账号**：`hermes`
+- **默认密码**：`hermes123` *(首次运行自动生成至本地 `.env` 文件中，可随时按需修改)*
 
 ---
 
-## 进阶配置与环境变量
+## 进阶配置与安全凭据管理
 
-项目优先自动读取 Hermes 本地安装环境（如 `%LOCALAPPDATA%\hermes\config.yaml`）。若需在特殊环境下自定义配置，可通过环境变量显式指定：
+项目具备极高的自适应能力，首次启动自动在根目录创建 `.env` 文件。你可随时用文本编辑器修改 `.env` 进行自定义：
 
-| 环境变量名 | 说明 | 默认值 |
+| 配置项 / 环境变量名 | 说明 | 默认值 |
 | :--- | :--- | :--- |
-| `HERMES_HOME` | Hermes 配置与数据库所在根目录 | 自动探测当前系统标准路径 |
-| `HERMES_WEB_USER` | 覆盖 Web 登录用户名 | 自动读取 `config.yaml` 基础配置 |
-| `HERMES_WEB_PASSWORD` | 显式指定 Web 登录明文口令 (便于自定义访问) | 自动读取 `config.yaml` 密码哈希 |
+| `HERMES_WEB_USER` | Web 控制台登录用户名 | `hermes` (或自动读取 `config.yaml`) |
+| `HERMES_WEB_PASSWORD` | Web 控制台登录口令 | `hermes123` (开箱默认，保存在 `.env` 中) |
+| `HERMES_HOME` | Hermes 配置与数据库根目录 | 自动探测系统标准路径 (`%LOCALAPPDATA%\hermes`) |
+| `PORT` | 本地服务监听端口 | `9220` |
 
 ---
 
@@ -108,6 +111,7 @@ hermes-web-remote/
 ├── 启动网站.bat               # Windows 一键静默启动批处理 (动态相对寻址)
 ├── 重启网站.bat               # Windows 服务重启批处理
 ├── 停止网站.bat               # Windows 服务终止批处理
+├── .env.example              # 环境变量配置模板
 ├── .gitignore                # Git 忽略规则
 ├── LICENSE                   # 开源许可证 (MIT)
 └── README.md                 # 技术文档

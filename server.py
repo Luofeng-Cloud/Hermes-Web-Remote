@@ -34,6 +34,28 @@ PID_FILE = APP_DIR / "server.pid"
 UPLOADS_DIR = APP_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+
+def load_env_file(override: bool = False) -> None:
+    """轻量加载 APP_DIR 下的 .env 环境变量（纯标准库，无需外部依赖）。"""
+    env_file = APP_DIR / ".env"
+    if not env_file.is_file():
+        return
+    try:
+        for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k = k.strip()
+            v = v.strip().strip("'\"")
+            if k and (override or k not in os.environ):
+                os.environ[k] = v
+    except Exception:
+        pass
+
+
+load_env_file()
+
 LOCALAPPDATA = os.environ.get("LOCALAPPDATA", "")
 DEFAULT_HERMES_HOME = Path(LOCALAPPDATA) / "hermes" if LOCALAPPDATA else Path.home() / ".hermes"
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", DEFAULT_HERMES_HOME)).expanduser().resolve()
@@ -366,13 +388,16 @@ def load_basic_auth_cfg() -> dict:
         if km:
             cfg[key] = next(g for g in km.groups() if g is not None)
     
-    # 环境变量可选覆盖与安全兜底
+    # 动态加载 .env 环境变量（支持免重启热感知）与开箱默认兜底
+    load_env_file(override=True)
     env_user = os.environ.get("HERMES_WEB_USER")
     env_pass = os.environ.get("HERMES_WEB_PASSWORD")
     if env_user:
         cfg["username"] = env_user
     if env_pass:
         cfg["password"] = env_pass
+    if not cfg["password"] and not cfg["password_hash"]:
+        cfg["password"] = "hermes123"
     if not cfg["secret"]:
         cfg["secret"] = "hermes-web-remote-secret-key-2026"
     return cfg

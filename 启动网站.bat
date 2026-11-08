@@ -1,10 +1,36 @@
 @echo off
 rem ============================================================================
-rem  Hermes Web Remote - 全自动自适应启动脚本 (集成 Tailscale 自动穿透)
+rem  Hermes Web Remote - 全自动自适应启动脚本 (集成 Tailscale 穿透与凭据自动配置)
 rem ============================================================================
 chcp 936 >nul
 cd /d "%~dp0"
 set PYTHONPATH=%~dp0
+
+rem 自动探测并初始化 .env 凭据配置
+if not exist "%~dp0.env" (
+    (
+        echo # ==============================================================================
+        echo # Hermes Web Remote - 访问凭据配置
+        echo # ==============================================================================
+        echo # 本文件由启动脚本自动生成，用于配置手机端远程访问时的登录账号与密码。
+        echo # 你可以随时用记事本打开本文件修改账号或密码，保存后下次登录直接生效。
+        echo.
+        echo HERMES_WEB_USER=hermes
+        echo HERMES_WEB_PASSWORD=hermes123
+    ) > "%~dp0.env"
+)
+
+rem 读取 .env 中的账号与密码并注入当前进程
+set "WEB_USER=hermes"
+set "WEB_PASS=hermes123"
+if exist "%~dp0.env" (
+    for /f "usebackq tokens=1* delims==" %%A in ("%~dp0.env") do (
+        if "%%A"=="HERMES_WEB_USER" set "WEB_USER=%%B"
+        if "%%A"=="HERMES_WEB_PASSWORD" set "WEB_PASS=%%B"
+    )
+)
+set "HERMES_WEB_USER=%WEB_USER%"
+set "HERMES_WEB_PASSWORD=%WEB_PASS%"
 
 echo [1/3] 正在检查端口占用情况...
 netstat -ano 2>nul | findstr ":9220 " | findstr "LISTENING" >nul
@@ -95,7 +121,7 @@ if not defined TS_EXE (
 
 echo.
 echo ============================================================================
-echo  Hermes 远程 Web 服务运行正常！
+echo  Hermes 远程 Web 控制台运行正常！
 echo  本地测试地址: http://127.0.0.1:9220
 echo.
 
@@ -106,17 +132,25 @@ echo  正在自动更新并打通 Tailscale 隧道通道:
 echo ----------------------------------------------------------------------------
 "%TS_EXE%" serve --bg --set-path /app http://127.0.0.1:9220
 echo ----------------------------------------------------------------------------
-echo  请在手机浏览器 [Safari 或 Chrome] 直接打开上方给出的专属 HTTPS 链接即可！
-goto :after_tailscale
+echo  请在手机浏览器 [Safari 或 Chrome] 直接打开上方给出的专属 HTTPS 链接！
+goto :show_credentials
 
 :no_tailscale
 echo  [提示] 未检测到 Tailscale 客户端，当前仅可通过本机或局域网访问。
 echo  若需手机外出远程使用，请在电脑与手机上安装并登录 Tailscale。
 
-:after_tailscale
+:show_credentials
+echo.
+echo  【手机端登录凭据】
+echo ----------------------------------------------------------------------------
+echo  登 录 账 号: %WEB_USER%
+echo  登 录 密 码: %WEB_PASS%
+echo ----------------------------------------------------------------------------
+echo  提示: 账号与密码保存在本目录下的 .env 文件中，可随时用记事本打开修改。
+echo  首次在手机浏览器打开链接时，输入上方账号密码即可一键登录！
 echo ============================================================================
 echo.
-timeout /t 8 >nul 2>&1 || ping -n 9 127.0.0.1 >nul
+timeout /t 10 >nul 2>&1 || ping -n 11 127.0.0.1 >nul
 exit /b 0
 
 :start_warn
