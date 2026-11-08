@@ -1,0 +1,45 @@
+# ==============================================================================
+# Hermes Web Remote - Git Ignore Rules
+# ==============================================================================
+
+# Python 缓存与字节码
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# 服务运行日志与进程状态
+*.log
+*.log.*
+server.log
+server_stdout.log
+watchdog.log
+*.pid
+server.pid
+watchdog.pid
+
+# 用户上传的文件（排除具体文件，仅保留 .gitkeep 保持目录结构）
+uploads/*
+!uploads/.gitkeep
+
+# 敏感配置与密钥（防止本地配置泄露）
+.env
+.env.local
+config.local.yaml
+*.key
+*.pem
+
+# 系统与 IDE 缓存
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
