@@ -10,6 +10,7 @@
   state.db，桌面端重新打开该对话即可看到；网页端靠轮询 messages 表增量展示。
 """
 import base64
+import gzip
 import hashlib
 import hmac
 import http.cookies
@@ -35,11 +36,12 @@ UPLOADS_DIR = APP_DIR / "uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def load_env_file(override: bool = False) -> None:
-    """轻量加载 APP_DIR 下的 .env 环境变量（纯标准库，无需外部依赖）。"""
+def _read_env_dict() -> dict:
+    """解析 APP_DIR/.env 为键值对字典。"""
     env_file = APP_DIR / ".env"
+    data = {}
     if not env_file.is_file():
-        return
+        return data
     try:
         for line in env_file.read_text(encoding="utf-8", errors="replace").splitlines():
             line = line.strip()
@@ -48,10 +50,18 @@ def load_env_file(override: bool = False) -> None:
             k, v = line.split("=", 1)
             k = k.strip()
             v = v.strip().strip("'\"")
-            if k and (override or k not in os.environ):
-                os.environ[k] = v
+            if k:
+                data[k] = v
     except Exception:
         pass
+    return data
+
+
+def load_env_file(override: bool = False) -> None:
+    """轻量加载 APP_DIR 下的 .env 环境变量（纯标准库，无需外部依赖）。"""
+    for k, v in _read_env_dict().items():
+        if override or k not in os.environ:
+            os.environ[k] = v
 
 
 load_env_file()
@@ -79,13 +89,15 @@ def _resolve_hermes_bin(home: Path) -> Path:
 
 HERMES_BIN = _resolve_hermes_bin(HERMES_HOME)
 
-PORT = 9220
+PORT = int(os.environ.get("PORT", "9220") or "9220")
 BIND = "127.0.0.1"
 BASE_PREFIX = "/app"          # tailscale serve --set-path=/app 的挂载前缀（兼容被剥离/不被剥离两种情况）
 JOB_TIMEOUT = 900             # 单次回合最长 15 分钟
 MAX_JOBS = 3                  # 全局并发回合上限
 COOKIE_NAME = "hermes_web_session"
 COOKIE_TTL = 365 * 24 * 3600   # 登录态长期有效（保持一直登录）
+UPLOAD_TTL_DAYS = 30           # 上传附件保留天数，超期后台自动清理
+UPLOAD_CLEAN_INTERVAL = 6 * 3600
 
 # 可通过 /api/file 预览的媒体扩展名（防止任意文件泄露）
 MEDIA_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".heic", ".heif",
@@ -96,6 +108,59 @@ SENSITIVE_NAME = {"config.yaml", ".env", "auth.json", "state.db", "credentials",
                   "id_rsa", "id_ed25519"}
 
 JOBS = {}
+_STATIC_CACHE = {}                 # 静态文件内存缓存：name -> (mtime_ns, 原文, gzip 版本)
+
+
+def _compressible(ctype: str) -> bool:
+    c = (ctype or "").lower()
+    return c.startswith("text/") or any(k in c for k in ("json", "javascript", "xml", "manifest"))
+
+
+def _parse_byte_range(range_hdr: str, file_size: int) -> tuple[int, int, int]:
+    """Parse a single HTTP Range header into (status, start, end) with 200/206/416."""
+    hdr = range_hdr.strip()
+    if not hdr.lower().startswith("bytes=") or "," in hdr:
+        return (200, 0, max(0, file_size - 1))
+    m = re.fullmatch(r"bytes=(\d*)-(\d*)", hdr, re.I)
+    if not m or (not m.group(1) and not m.group(2)) or file_size <= 0:
+        return (416, 0, 0)
+    s_str, e_str = m.group(1), m.group(2)
+    if not s_str:
+        suffix = int(e_str)
+        if suffix <= 0:
+            return (416, 0, 0)
+        return (206, max(0, file_size - suffix), file_size - 1)
+    start = int(s_str)
+    end = min(int(e_str), file_size - 1) if e_str else (file_size - 1)
+    if start >= file_size or start > end:
+        return (416, 0, 0)
+    return (206, start, end)
+
+
+def _cleanup_uploads():
+    """清理超过 UPLOAD_TTL_DAYS 天的上传附件，避免 uploads/ 无限增长。"""
+    cutoff = time.time() - UPLOAD_TTL_DAYS * 86400
+    removed = 0
+    for f in UPLOADS_DIR.iterdir():
+        try:
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink()
+                removed += 1
+        except OSError:
+            continue
+    if removed:
+        log(f"uploads cleanup: removed {removed} files older than {UPLOAD_TTL_DAYS} days")
+
+
+def _cleanup_loop():
+    while True:
+        try:
+            _cleanup_uploads()
+        except Exception as exc:
+            log(f"uploads cleanup error: {exc}")
+        time.sleep(UPLOAD_CLEAN_INTERVAL)
+
+
 JOBS_LOCK = threading.Lock()
 SESSION_QUEUE = {}                 # 排队中的回合：qkey(session_id 或 new-*) -> [job_id]
 SESSION_JOB = {}                   # session_id -> job_id（同一会话同时只跑一个回合）
@@ -370,8 +435,31 @@ def log(msg: str) -> None:
         pass
 
 
+_AUTH_CACHE = {"mtime": None, "cfg": None}
+_AUTH_LOCK = threading.Lock()
+
+
+def _stat_mtime(p: Path):
+    try:
+        return p.stat().st_mtime_ns
+    except OSError:
+        return None
+
+
 def load_basic_auth_cfg() -> dict:
-    """从 config.yaml 读取 dashboard.basic_auth（用户名/口令哈希/签名密钥）。
+    """带双源 mtime 缓存的鉴权配置读取：仅当 config.yaml 或 .env 变化时才重新解析。"""
+    mt = (_stat_mtime(CONFIG_YAML), _stat_mtime(APP_DIR / ".env"))
+    with _AUTH_LOCK:
+        if _AUTH_CACHE["cfg"] is not None and _AUTH_CACHE["mtime"] == mt:
+            return dict(_AUTH_CACHE["cfg"])
+        cfg = _parse_basic_auth_cfg()
+        _AUTH_CACHE["mtime"] = mt
+        _AUTH_CACHE["cfg"] = cfg
+        return dict(cfg)
+
+
+def _parse_basic_auth_cfg() -> dict:
+    """从 config.yaml 与 .env / 环境变量读取鉴权配置（用户名/口令哈希/签名密钥）。
 
     YAML 值可能是单引号、双引号或无引号（hermes 改写 config.yaml 后引号风格会变），
     三种都要兼容。
@@ -380,22 +468,23 @@ def load_basic_auth_cfg() -> dict:
     try:
         text = CONFIG_YAML.read_text(encoding="utf-8")
     except OSError:
-        return cfg
+        text = ""
     m = re.search(r"basic_auth:\s*\n((?:\s+[a-z_]+:\s*.+\n)+)", text)
     block = m.group(1) if m else ""
     for key in ("username", "secret", "password", "password_hash"):
         km = re.search(rf"{key}:\s*(?:'([^']*)'|\"((?:[^\"\\\\]|\\\\.)*)\"|(\S+))", block)
         if km:
             cfg[key] = next(g for g in km.groups() if g is not None)
-    
-    # 动态加载 .env 环境变量（支持免重启热感知）与开箱默认兜底
-    load_env_file(override=True)
-    env_user = os.environ.get("HERMES_WEB_USER")
-    env_pass = os.environ.get("HERMES_WEB_PASSWORD")
+
+    # 动态读取 .env 与环境变量覆盖（支持免重启热感知）及开箱默认兜底
+    dotenv = _read_env_dict()
+    env_user = dotenv.get("HERMES_WEB_USER") or os.environ.get("HERMES_WEB_USER")
+    env_pass = dotenv.get("HERMES_WEB_PASSWORD") or os.environ.get("HERMES_WEB_PASSWORD")
     if env_user:
         cfg["username"] = env_user
     if env_pass:
         cfg["password"] = env_pass
+        cfg["password_hash"] = ""
     if not cfg["password"] and not cfg["password_hash"]:
         cfg["password"] = "hermes123"
     if not cfg["secret"]:
@@ -766,15 +855,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         log(f"{self.address_string()} {fmt % args}")
 
+    def _accepts_gzip(self) -> bool:
+        return "gzip" in (self.headers.get("Accept-Encoding") or "").lower()
+
     def _send(self, code, body: bytes, ctype="application/json; charset=utf-8",
               extra=None):
+        extra = dict(extra or {})
+        # 文本类响应（接口 JSON 等）超过 1KB 且客户端支持时 gzip 压缩，省手机流量
+        if (len(body) > 1024 and "Content-Encoding" not in extra
+                and _compressible(ctype) and self._accepts_gzip()):
+            body = gzip.compress(body, compresslevel=5)
+            extra["Content-Encoding"] = "gzip"
         self.send_response(code)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
-        self.send_header("Cache-Control", "no-store")
-        for k, v in (extra or {}).items():
+        self.send_header("Vary", "Accept-Encoding")
+        if "Cache-Control" not in extra:
+            self.send_header("Cache-Control", "no-store")
+        for k, v in extra.items():
             self.send_header(k, v)
         self.end_headers()
         if getattr(self, "_head", False):
@@ -861,6 +961,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self._json(200, {"user": getattr(self, "_user", "")})
         if path.startswith("/static/"):
             return self._static(path[len("/static/"):])
+        if path == "/sw.js":   # Service Worker 放在站点根（挂载前缀下），作用域才能覆盖整站
+            return self._static("sw.js")
         if path.startswith("/api/"):
             if not self._require_auth():
                 return
@@ -906,11 +1008,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
         fp = STATIC_DIR / name
         if not fp.is_file():
             return self._json(404, {"error": "文件不存在"})
+        ext = name.rsplit(".", 1)[-1].lower()
         ctype = {"html": "text/html; charset=utf-8", "js": "application/javascript; charset=utf-8",
                  "css": "text/css; charset=utf-8", "png": "image/png", "svg": "image/svg+xml",
-                 "ico": "image/x-icon"}.get(name.rsplit(".", 1)[-1].lower(),
-                                            "application/octet-stream")
-        self._send(200, fp.read_bytes(), ctype)
+                 "ico": "image/x-icon",
+                 "webmanifest": "application/manifest+json; charset=utf-8",
+                 "json": "application/json; charset=utf-8"}.get(ext, "application/octet-stream")
+        try:
+            mt = fp.stat().st_mtime_ns
+            ent = _STATIC_CACHE.get(name)
+            if not ent or ent[0] != mt:
+                raw = fp.read_bytes()
+                gz = (gzip.compress(raw, compresslevel=6)
+                      if len(raw) > 1024 and _compressible(ctype) else None)
+                ent = (mt, raw, gz)
+                _STATIC_CACHE[name] = ent
+        except OSError:
+            return self._json(404, {"error": "文件不存在"})
+        _, raw, gz = ent
+        # 页面本体与 Service Worker 必须每次校验；带版本号的第三方库/图标长期缓存
+        if name in ("index.html", "sw.js"):
+            cc = "no-cache" if name == "sw.js" else "no-store"
+        elif ext == "webmanifest":
+            cc = "public, max-age=3600"
+        else:
+            cc = "public, max-age=2592000"
+        extra = {"Cache-Control": cc}
+        body = raw
+        if gz is not None and self._accepts_gzip():
+            body = gz
+            extra["Content-Encoding"] = "gzip"
+        self._send(200, body, ctype, extra)
 
     # ---- 登录
     def _login(self):
@@ -1102,7 +1230,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except Exception as exc:
             return self._json(404, {"error": f"读取失败：{exc}"})
         import mimetypes
-        OFFICE_MIMES = {
+        FILE_MIMES = {
             ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             ".doc": "application/msword",
             ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -1118,29 +1246,59 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ".jpeg": "image/jpeg",
             ".gif": "image/gif",
             ".webp": "image/webp",
+            ".bmp": "image/bmp",
+            ".svg": "image/svg+xml",
+            ".heic": "image/heic",
+            ".heif": "image/heif",
+            ".mp4": "video/mp4",
+            ".webm": "video/webm",
+            ".mov": "video/quicktime",
+            ".mp3": "audio/mpeg",
+            ".m4a": "audio/mp4",
+            ".wav": "audio/wav",
+            ".flac": "audio/flac",
             ".zip": "application/zip",
         }
-        ctype = OFFICE_MIMES.get(fp.suffix.lower()) or mimetypes.guess_type(str(fp))[0] or "application/octet-stream"
+        ctype = FILE_MIMES.get(fp.suffix.lower()) or mimetypes.guess_type(str(fp))[0] or "application/octet-stream"
         disp = "attachment" if (download or "").strip() in ("1", "true", "yes") else "inline"
         clean_stem = re.sub(r'[^A-Za-z0-9_.-]', '', fp.stem)[:30] or "document"
         safe_ascii = clean_stem + fp.suffix.lower()
-        self.send_response(200)
+
+        status, start, end = _parse_byte_range(self.headers.get("Range") or "", file_size)
+        if status == 416:
+            self.send_response(416)
+            self.send_header("Content-Range", f"bytes */{file_size}")
+            self.send_header("Content-Length", "0")
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return
+
+        send_len = 0 if file_size == 0 else (end - start + 1)
+        self.send_response(status)
         self.send_header("Content-Type", ctype)
-        self.send_header("Content-Length", str(file_size))
+        self.send_header("Content-Length", str(send_len))
+        self.send_header("Accept-Ranges", "bytes")
+        if status == 206:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "same-origin")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Disposition", f"{disp}; filename=\"{safe_ascii}\"; filename*=UTF-8''{urllib.parse.quote(fp.name)}")
         self.end_headers()
-        if getattr(self, "_head", False):
+        if getattr(self, "_head", False) or send_len == 0:
             return
         try:
             with open(fp, "rb") as f:
-                while True:
-                    chunk = f.read(64 * 1024)
+                if start > 0:
+                    f.seek(start)
+                remaining = send_len
+                while remaining > 0:
+                    chunk = f.read(min(64 * 1024, remaining))
                     if not chunk:
                         break
                     self.wfile.write(chunk)
+                    remaining -= len(chunk)
         except (BrokenPipeError, ConnectionResetError, OSError):
             pass
 
@@ -1472,6 +1630,7 @@ def main():
         with ThreadingHTTPServer((BIND, PORT), Handler) as httpd:
             PID_FILE.write_text(str(os.getpid()), encoding="utf-8")
             log(f"server start on {BIND}:{PORT} pid={os.getpid()}")
+            threading.Thread(target=_cleanup_loop, daemon=True).start()
             try:
                 httpd.serve_forever()
             except KeyboardInterrupt:

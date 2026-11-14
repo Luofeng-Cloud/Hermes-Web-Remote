@@ -1,28 +1,49 @@
 @echo off
 rem ============================================================================
-rem  Hermes Web Remote - 智能停止脚本
+rem  Hermes Web Remote - 智能停止脚本 (同步联动下线看门狗与 Web 服务)
 rem ============================================================================
 chcp 936 >nul
 cd /d "%~dp0"
 
-echo 正在停止 Hermes 远程 Web 服务 [端口: 9220]...
+echo 正在停止 Hermes 远程 Web 服务及守护看门狗 [端口: 9220]...
 
-rem 1. 尝试使用 Python 优雅下线
+rem 1. 多级探测 Python 解释器用于优雅下线
 set PY_CLI=
 for /f "delims=" %%I in ('where python 2^>nul') do (
     call :check_real_python "%%I"
     if defined PY_CLI goto :do_stop
 )
-if exist "%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\python.exe" (
-    set "PY_CLI=%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\python.exe"
+for /f "delims=" %%I in ('where pythonw 2^>nul') do if not defined PY_CLI set "PY_CLI=%%I"
+if defined PY_CLI goto :do_stop
+if exist "%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\pythonw.exe" (
+    set "PY_CLI=%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts\pythonw.exe"
+    goto :do_stop
+)
+if exist "%LOCALAPPDATA%\hermes\hermes-agent\.venv\Scripts\pythonw.exe" (
+    set "PY_CLI=%LOCALAPPDATA%\hermes\hermes-agent\.venv\Scripts\pythonw.exe"
+    goto :do_stop
+)
+for /d %%D in ("%LOCALAPPDATA%\Programs\Python\Python*") do (
+    if exist "%%D\pythonw.exe" (
+        set "PY_CLI=%%D\pythonw.exe"
+        goto :do_stop
+    )
 )
 
 :do_stop
+rem 先终止看门狗，防止其在停服瞬间自动重启主进程
 if defined PY_CLI (
+    "%PY_CLI%" "%~dp0watchdog.py" --stop >nul 2>&1
     "%PY_CLI%" "%~dp0server.py" --stop >nul 2>&1
 )
 
-rem 2. 读取 server.pid 兜底终止
+rem 2. 读取 watchdog.pid 与 server.pid 兜底终止
+if exist "%~dp0watchdog.pid" (
+    for /f "usebackq tokens=*" %%A in ("%~dp0watchdog.pid") do (
+        taskkill /f /pid %%A >nul 2>&1
+    )
+    del "%~dp0watchdog.pid" >nul 2>&1
+)
 if exist "%~dp0server.pid" (
     for /f "usebackq tokens=*" %%A in ("%~dp0server.pid") do (
         taskkill /f /pid %%A >nul 2>&1
@@ -43,7 +64,7 @@ if not errorlevel 1 goto :stop_warn
 
 echo.
 echo ============================================================================
-echo  Hermes 远程 Web 服务已彻底停止！[端口 9220 已释放]
+echo  Hermes 远程 Web 服务及守护看门狗已彻底停止！[端口 9220 已释放]
 echo ============================================================================
 echo.
 timeout /t 3 >nul 2>&1 || ping -n 4 127.0.0.1 >nul

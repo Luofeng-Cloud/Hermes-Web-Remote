@@ -4,9 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Hermes 远程访问</title>
+<link rel="manifest" href="static/manifest.webmanifest">
+<link rel="icon" type="image/png" href="static/icon-192.png">
+<link rel="apple-touch-icon" href="static/icon-192.png">
+<meta name="theme-color" id="themeColorMeta" content="#0f1115">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Hermes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script>
 if(!location.pathname.endsWith("/"))location.replace(location.pathname+"/"+location.search);
-try{var _t=localStorage.getItem("hermes_theme");if(_t==="light"||_t==="dark")document.documentElement.dataset.theme=_t;}catch(e){}
+try{var _t=localStorage.getItem("hermes_theme");if(_t!=="light"&&_t!=="dark"){_t=(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";}document.documentElement.dataset.theme=_t;}catch(e){}
 </script>
 <script src="static/marked.min.js?v=20261022b"></script>
 <script src="static/purify.min.js?v=20261022b"></script>
@@ -61,7 +69,7 @@ body{
 /* ---------- 顶栏 ---------- */
 /* ---------- 主页面顶部品牌（紧凑） ---------- */
 .homeTop{
-  display:flex; align-items:center;
+  display:flex; align-items:center; gap:6px;
   padding:calc(8px + env(safe-area-inset-top, 0px)) 12px 4px;
   flex-shrink:0;
 }
@@ -245,16 +253,16 @@ html[data-theme="light"] .badge.s-gui{background:#f3e8ff; color:#6d28d9}
 
 /* ---------- 输入区 ---------- */
 #inputBar{
-  padding:6px 10px calc(6px + env(safe-area-inset-bottom));
+  padding:5px 10px calc(5px + env(safe-area-inset-bottom));
   border-top:1px solid var(--line); background:var(--panel); flex-shrink:0;
 }
 .homeComposer{
-  padding:6px 10px calc(6px + env(safe-area-inset-bottom));
+  padding:5px 10px calc(5px + env(safe-area-inset-bottom));
   border-top:1px solid var(--line); flex-shrink:0;
 }
 .composer{
   background:var(--panel2); border:1px solid var(--line); border-radius:20px;
-  padding:5px 7px 5px 11px; display:flex; flex-direction:column;
+  padding:6px 8px 5px 11px; display:flex; flex-direction:column;
   max-width:860px; margin:0 auto; width:100%;
 }
 .composerInputRow{display:flex; align-items:flex-end; gap:8px; width:100%}
@@ -268,7 +276,7 @@ html[data-theme="light"] .badge.s-gui{background:#f3e8ff; color:#6d28d9}
   width:30px; height:30px; border-radius:50%; border:1px solid var(--line);
   background:transparent; color:var(--fg); font-size:19px; line-height:1;
   display:inline-flex; align-items:center; justify-content:center;
-  flex-shrink:0; cursor:pointer; margin-bottom:2px; transition:all .15s;
+  flex-shrink:0; cursor:pointer; transition:all .15s;
 }
 .attachBtn:hover{border-color:var(--accent); color:var(--accent); background:var(--panel)}
 .attachBtn:disabled{opacity:.4; cursor:not-allowed}
@@ -309,7 +317,7 @@ html[data-theme="light"] .badge.s-gui{background:#f3e8ff; color:#6d28d9}
 .mfcInfo{display:flex; flex-direction:column; min-width:0; flex:1}
 .mfcName{font-size:13px; font-weight:500; color:var(--fg); overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
 .mfcHint{font-size:11px; color:var(--muted); margin-top:2px}
-.composerRow{display:flex; align-items:center; gap:6px}
+.composerRow{display:flex; align-items:center; gap:6px; margin-top:4px}
 .pill{
   display:inline-flex; align-items:center; gap:5px; background:transparent;
   border:1px solid var(--line); border-radius:999px; padding:4px 10px;
@@ -394,6 +402,7 @@ html[data-theme="light"] .badge.s-gui{background:#f3e8ff; color:#6d28d9}
       <div class="homeTop">
         <div class="brand"><span class="brandLogo">H</span><span class="brandText">Hermes<b>远程访问</b></span></div>
         <div class="spacer"></div>
+        <button id="installBtn" class="themeBtn" type="button" title="添加到手机桌面" style="display:none">📲 桌面</button>
         <button id="themeBtnHome" class="themeBtn" type="button" title="切换明亮/暗色主题">☀️ 亮色</button>
       </div>
       <div class="search">
@@ -423,13 +432,13 @@ html[data-theme="light"] .badge.s-gui{background:#f3e8ff; color:#6d28d9}
             <button class="imgRemove" id="homeAttachRemove" title="移除附件">✕</button>
           </div>
           <div class="composerInputRow">
+            <textarea id="homeInput" rows="1" placeholder="输入内容，直接新建会话…（Enter 发送）"></textarea>
+          </div>
+          <div class="composerRow">
             <div class="attachWrap">
               <button class="attachBtn" id="homeAttachBtn" title="添加附件或图片">+</button>
               <input type="file" id="homeFileInput" style="display:none">
             </div>
-            <textarea id="homeInput" placeholder="输入内容，直接新建会话…（Enter 发送）"></textarea>
-          </div>
-          <div class="composerRow">
             <button class="pill" id="homeModelPill" title="选择模型">
               <span class="pillText" id="homeModelPillText">默认模型</span><span class="caret">▾</span>
             </button>
@@ -473,13 +482,13 @@ html[data-theme="light"] .badge.s-gui{background:#f3e8ff; color:#6d28d9}
             <button class="imgRemove" id="chatAttachRemove" title="移除附件">✕</button>
           </div>
           <div class="composerInputRow">
+            <textarea id="msgInput" rows="1" placeholder="给 Hermes 发消息…（Enter 发送）"></textarea>
+          </div>
+          <div class="composerRow">
             <div class="attachWrap">
               <button class="attachBtn" id="chatAttachBtn" title="添加附件或图片">+</button>
               <input type="file" id="chatFileInput" style="display:none">
             </div>
-            <textarea id="msgInput" placeholder="给 Hermes 发消息…（Enter 发送）"></textarea>
-          </div>
-          <div class="composerRow">
             <button class="pill" id="modelPill" title="选择模型">
               <span class="pillText" id="modelPillText">模型</span><span class="caret">▾</span>
             </button>
@@ -504,11 +513,44 @@ html[data-theme="light"] .badge.s-gui{background:#f3e8ff; color:#6d28d9}
 "use strict";
 const $ = (id) => document.getElementById(id);
 
-// ---------- 主题切换（暗色/明亮双主题） ----------
-function applyTheme(theme) {
+// ---------- 轻提示（替代 alert，不打断操作） ----------
+function toast(msg, ms) {
+  let box = document.getElementById("hToastBox");
+  if (!box) {
+    const st = document.createElement("style");
+    st.textContent = `
+#hToastBox{position:fixed; left:0; right:0; top:calc(12px + env(safe-area-inset-top, 0px)); z-index:10000;
+  display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none; padding:0 12px}
+.hToast{max-width:min(92vw,460px); background:rgba(20,22,28,.94); color:#fff; padding:10px 16px; border-radius:14px;
+  font-size:13.5px; line-height:1.5; box-shadow:0 6px 24px rgba(0,0,0,.35); opacity:0; transform:translateY(-8px);
+  transition:opacity .22s, transform .22s; word-break:break-word; white-space:pre-wrap; pointer-events:auto}
+.hToast.on{opacity:1; transform:translateY(0)}`;
+    document.head.appendChild(st);
+    box = document.createElement("div");
+    box.id = "hToastBox";
+    document.body.appendChild(box);
+  }
+  let text = String(msg == null ? "" : msg);
+  if (text.length > 300) text = text.slice(0, 300) + "…";
+  const el = document.createElement("div");
+  el.className = "hToast";
+  el.textContent = text;
+  box.appendChild(el);
+  while (box.children.length > 3) box.firstChild.remove();
+  requestAnimationFrame(() => el.classList.add("on"));
+  const life = ms || Math.min(8000, 2500 + text.length * 60);
+  const close = () => { el.classList.remove("on"); setTimeout(() => el.remove(), 260); };
+  el.onclick = close;
+  setTimeout(close, life);
+}
+
+// ---------- 主题切换（暗色/明亮双主题，首次访问跟随系统） ----------
+function applyTheme(theme, persist = true) {
   const isLight = theme === "light";
   document.documentElement.dataset.theme = isLight ? "light" : "dark";
-  try { localStorage.setItem("hermes_theme", isLight ? "light" : "dark"); } catch (e) {}
+  if (persist) { try { localStorage.setItem("hermes_theme", isLight ? "light" : "dark"); } catch (e) {} }
+  const tc = $("themeColorMeta");
+  if (tc) tc.setAttribute("content", isLight ? "#f4f6fa" : "#0f1115");
   const homeBtn = $("themeBtnHome");
   const chatBtn = $("themeBtnChat");
   if (homeBtn) {
@@ -525,9 +567,19 @@ function toggleTheme() {
   applyTheme(cur === "light" ? "dark" : "light");
 }
 (function initTheme() {
-  let saved = "dark";
-  try { saved = localStorage.getItem("hermes_theme") || "dark"; } catch (e) {}
-  applyTheme(saved === "light" ? "light" : "dark");
+  let saved = null;
+  try { saved = localStorage.getItem("hermes_theme"); } catch (e) {}
+  const mq = window.matchMedia ? matchMedia("(prefers-color-scheme: light)") : null;
+  const hasManual = saved === "light" || saved === "dark";
+  // 没有手动选择过：跟随系统（不写入存储，系统切换时实时跟随）；手动选过则以手动为准
+  applyTheme(hasManual ? saved : (mq && mq.matches ? "light" : "dark"), false);
+  if (mq && mq.addEventListener) {
+    mq.addEventListener("change", (ev) => {
+      let manual = null;
+      try { manual = localStorage.getItem("hermes_theme"); } catch (e) {}
+      if (manual !== "light" && manual !== "dark") applyTheme(ev.matches ? "light" : "dark", false);
+    });
+  }
   const homeBtn = $("themeBtnHome");
   const chatBtn = $("themeBtnChat");
   if (homeBtn) homeBtn.onclick = toggleTheme;
@@ -819,7 +871,7 @@ function enhanceCodeBlocks(container) {
           btn.classList.remove("copied");
         }, 1800);
       } else {
-        alert("复制失败，请手动选择复制");
+        toast("复制失败，请手动选择复制");
       }
     };
     pre.appendChild(btn);
@@ -845,14 +897,17 @@ $("msgList").addEventListener("click", async (e) => {
 // 全量渲染：一次性挂载，首帧即在底部，绝不分片跳动
 function renderMsgs(appendIds = []) {
   const box = $("msgList");
+  const existingOpts = Array.from(box.querySelectorAll(".msg.optimistic"));
   if (appendIds.length) {
     const frag = document.createElement("div");
     frag.innerHTML = state.msgs.filter(m => appendIds.includes(m.id)).map(m => msgHtml(m)).join("");
     while (frag.firstChild) box.appendChild(frag.firstChild);
+    existingOpts.forEach(el => { if (el.parentNode === box) box.appendChild(el); });
     enhanceCodeBlocks(box);
     return Promise.resolve();
   }
   box.innerHTML = state.msgs.map(m => msgHtml(m)).join("");
+  existingOpts.forEach(el => box.appendChild(el));
   enhanceCodeBlocks(box);
   return Promise.resolve();
 }
@@ -1004,19 +1059,73 @@ function getMimeType(filename) {
   return map[ext] || "application/octet-stream";
 }
 
-// 全局单例文件 Blob 缓存，杜绝重复网络请求
+// 全局单例文件 Blob 缓存（带 LRU 上限，杜绝重复网络请求与长驻内存膨胀）
 const _fileBlobCache = new Map();
+const MAX_BLOB_CACHE = 5;
 
 async function getFileBlob(path) {
-  if (_fileBlobCache.has(path)) return _fileBlobCache.get(path);
+  if (_fileBlobCache.has(path)) {
+    const cached = _fileBlobCache.get(path);
+    _fileBlobCache.delete(path);
+    _fileBlobCache.set(path, cached);
+    return cached;
+  }
   const fname = path.split(/[\\/]/).pop() || "文件";
   const url = API_BASE + "api/file/" + encodeURIComponent(fname) + "?path=" + encodeURIComponent(path);
   const res = await fetch(url);
+  if (!res.ok) throw new Error("文件获取失败 (" + res.status + ")");
   const blob = await res.blob();
   const mime = getMimeType(fname) || blob.type || "application/octet-stream";
   const file = new File([blob], fname, { type: mime, lastModified: Date.now() });
+  if (_fileBlobCache.size >= MAX_BLOB_CACHE) {
+    const oldestKey = _fileBlobCache.keys().next().value;
+    if (oldestKey !== undefined) _fileBlobCache.delete(oldestKey);
+  }
   _fileBlobCache.set(path, file);
   return file;
+}
+
+// ---------- 浏览器历史栈管理（适配安卓手机边缘手势返回 / 物理返回键） ----------
+let _hasChatHistory = false;
+let _hasPreviewHistory = false;
+let _ignorePopCount = 0;
+
+function pushChatHistory() {
+  if (_hasChatHistory) return;
+  try {
+    history.pushState({ hermesView: "chat" }, "");
+    _hasChatHistory = true;
+  } catch (_) {}
+}
+
+function pushPreviewHistory() {
+  if (_hasPreviewHistory) return;
+  try {
+    history.pushState({ hermesView: "preview" }, "");
+    _hasPreviewHistory = true;
+  } catch (_) {}
+}
+
+function closePreviewOverlay(fromPopState = false) {
+  const root = document.getElementById("pvOverlay");
+  if (root && !root.hidden) {
+    root.hidden = true;
+    root.style.transform = "translateX(0)";
+    root.querySelectorAll("video, audio").forEach(media => {
+      try { media.pause(); media.src = ""; media.load(); } catch (_) {}
+    });
+    const b = document.getElementById("pvBody");
+    if (b) b.innerHTML = "";
+    const m = root.querySelector("#pvWpsModal");
+    if (m) m.classList.remove("show");
+  }
+  if (!fromPopState && _hasPreviewHistory) {
+    _hasPreviewHistory = false;
+    _ignorePopCount++;
+    try { history.back(); } catch (_) { _ignorePopCount = Math.max(0, _ignorePopCount - 1); }
+  } else if (fromPopState) {
+    _hasPreviewHistory = false;
+  }
 }
 
 async function shareFileDirectly(encPath) {
@@ -1068,7 +1177,6 @@ function ensurePreviewOverlay() {
 #pvWps{padding:6px 12px; border-radius:8px; border:1px solid var(--accent); background:var(--accent); color:#fff; font-size:13px; font-weight:500; cursor:pointer; flex-shrink:0; display:inline-flex; align-items:center; gap:4px; white-space:nowrap}
 #pvWps:hover{opacity:0.9}
 #pvClose{padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:transparent; color:var(--foreground); font-size:13px; cursor:pointer; flex-shrink:0; white-space:nowrap}
-#pvToast{position:fixed; top:60px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.85); color:#fff; padding:10px 18px; border-radius:24px; font-size:13px; z-index:9999; box-shadow:0 4px 16px rgba(0,0,0,0.3); pointer-events:none; transition:opacity 0.25s, transform 0.25s; opacity:0; text-align:center; max-width:88vw; line-height:1.5}
 #pvBody{flex:1; overflow:auto; -webkit-overflow-scrolling:touch; padding:12px; color:var(--foreground)}
 #pvBody img{max-width:100%; height:auto; border-radius:8px}
 #pvBody iframe{width:100%; height:100%; border:0; background:#fff}
@@ -1117,16 +1225,7 @@ function ensurePreviewOverlay() {
       </div>
     </div>`;
   document.body.appendChild(root);
-  root.querySelector("#pvClose").onclick = () => {
-    root.hidden = true;
-    root.style.transform = "translateX(0)";
-    root.querySelectorAll("video, audio").forEach(media => {
-      try { media.pause(); media.src = ""; media.load(); } catch (_) {}
-    });
-    document.getElementById("pvBody").innerHTML = "";
-    const m = root.querySelector("#pvWpsModal");
-    if (m) m.classList.remove("show");
-  };
+  root.querySelector("#pvClose").onclick = () => closePreviewOverlay(false);
   // ---------- iOS 最左侧向右滑动返回（界面 2：关闭预览浮层） ----------
   (function initPvOverlaySwipe(overlay) {
     let startX = 0, startY = 0, tracking = false, currentDx = 0;
@@ -1196,23 +1295,6 @@ async function previewFile(encPath) {
   const body = root.querySelector("#pvBody");
   root.querySelector("#pvTitle").textContent = fname;
 
-  function showToast(msg, ms = 3800) {
-    let t = document.getElementById("pvToast");
-    if (!t) {
-      t = document.createElement("div");
-      t.id = "pvToast";
-      document.body.appendChild(t);
-    }
-    t.textContent = msg;
-    t.style.opacity = "1";
-    t.style.transform = "translateX(-50%) translateY(0)";
-    clearTimeout(t._timer);
-    t._timer = setTimeout(() => {
-      t.style.opacity = "0";
-      t.style.transform = "translateX(-50%) translateY(-10px)";
-    }, ms);
-  }
-
   function triggerDownload() {
     const a = document.createElement("a");
     a.href = url + "&download=1";
@@ -1248,7 +1330,7 @@ async function previewFile(encPath) {
           }
         } else {
           triggerDownload();
-          showToast("💡 正在打开系统页：点击「在 “WPS Office” 中打开」即可秒开！");
+          toast("📥 已开始下载，可用 WPS 打开");
         }
       };
     } else {
@@ -1291,6 +1373,7 @@ async function previewFile(encPath) {
   }
 
   root.hidden = false;
+  pushPreviewHistory();
   body.innerHTML = '<div id="pvHint">加载中…</div>';
 
   const hint = (msg) => { body.innerHTML = `<div id="pvHint">${msg}</div>`; };
@@ -1472,13 +1555,16 @@ function msgHtml(m) {
 
 // ---------- 打开会话 ----------
 let openSeq = 0;   // 会话打开序号：连点两个会话时丢弃先发后至的旧响应
-async function openSession(id) {
+async function openSession(id, fromCreating = false) {
   const seq = ++openSeq;
   stopPolling();
   resetWindowScroll();
   state.current = id;
   state.msgs = [];
   if (state.chatClearAttach) state.chatClearAttach();
+
+  // 若从新建会话占位页无缝切入，保留尚未落库的乐观气泡
+  const carryOpts = fromCreating ? Array.from($("msgList").querySelectorAll(".msg.optimistic")) : [];
 
   // 1. 0 延迟预填当前会话标题与来源，同时彻底清空旧会话消息，杜绝串屏闪烁
   const sess = (state.sessions || []).find(x => x.id === id);
@@ -1497,6 +1583,7 @@ async function openSession(id) {
   $("inputBar").style.display = "flex";
   $("list").classList.add("hide");
   updateActiveItem(id);
+  pushChatHistory();
   try {
     const data = await api(`/api/sessions/${encodeURIComponent(id)}/messages?tail=120`);
     if (seq !== openSeq || state.current !== id) return;   // 期间已离开或切到别的会话，丢弃过期响应
@@ -1512,8 +1599,15 @@ async function openSession(id) {
     renderPills();
     $("earlierBtn").style.display = data.has_more_before ? "block" : "none";
     
-    // 2. 同步全量渲染并在绘制前瞬时触底，浏览器首帧即在最底部，0 画面跳动
+    // 2. 同步全量渲染并在绘制前瞬时触底，同时保留创建占位或加载期间新增的乐观气泡
+    const midOpts = Array.from($("msgList").querySelectorAll(".msg.optimistic"));
     await renderMsgs();
+    const userCnt = data.messages.filter(m => m.role === "user").length;
+    const leftoverOpts = carryOpts.slice(Math.min(userCnt, carryOpts.length)).concat(midOpts);
+    if (leftoverOpts.length) {
+      const box = $("msgList");
+      leftoverOpts.forEach(el => box.appendChild(el));
+    }
     scrollBottom(true);
 
     startMsgPolling();
@@ -1530,7 +1624,7 @@ async function openSession(id) {
     }
   } catch (err) {
     if (seq !== openSeq || state.current !== id) return;
-    alert("加载会话失败：" + (err && err.message ? err.message : err));
+    toast("加载会话失败：" + (err && err.message ? err.message : err));
     $("backBtn").click();
   }
 }
@@ -1541,6 +1635,12 @@ function scrollBottom(force) {
   }
 }
 $("backBtn").onclick = () => {
+  // 主动点返回：同步弹出为聊天视图压入的历史记录（popstate 触发的返回已先清标记，不会重复回退）
+  if (_hasChatHistory) {
+    _hasChatHistory = false;
+    _ignorePopCount++;
+    try { history.back(); } catch (_) { _ignorePopCount = Math.max(0, _ignorePopCount - 1); }
+  }
   openSeq++;
   stopPolling();
   state.homeCancelled = true;   // 主动离开：后台回复继续，但不再自动跳回
@@ -1605,6 +1705,9 @@ async function pollNewMessages() {
     if (state.current !== curSid) return;
     if (data.messages.length) {
       const ids = data.messages.map(m => m.id);
+      // 真实用户消息已落库：按数量清掉对应的临时气泡
+      const userCnt = data.messages.filter(m => m.role === "user").length;
+      if (userCnt) clearOptimistic(userCnt);
       state.msgs = state.msgs.concat(data.messages);
       state.maxMsgId = ids[ids.length - 1];
       renderMsgs(ids);
@@ -1645,12 +1748,12 @@ async function pollJobs() {
       rec.jumped = true;
       rec.sid = job.session_id;
       state.creatingSession = false;
-      await openSession(job.session_id);
+      await openSession(job.session_id, true);
     }
     if (job.status === "done" || job.status === "error") {
       delete state.activeJobs[jid];
       if (job.status === "error") {
-        alert("回合出错：" + (job.error || "未知错误"));
+        toast("回合出错：" + (job.error || "未知错误"));
         if (state.creatingSession) {
           state.creatingSession = false;
           state.pendingAfterCreate = [];
@@ -1660,22 +1763,51 @@ async function pollJobs() {
         }
       }
       if (rec.onDone) rec.onDone(job);
-      if (rec.sid && rec.sid === state.current) pollNewMessages().catch(() => {});
+      if (rec.sid && rec.sid === state.current) {
+        // 回合结束：补拉一次真实消息，之后兜底清理残留的临时气泡（如出错未落库）
+        pollNewMessages().catch(() => {}).finally(() => {
+          if (!Object.values(state.activeJobs).some(r => r.sid === state.current)) clearOptimistic();
+        });
+      }
     }
   }
   updateThinking();
 }
+// 乐观上屏：点击发送立即显示用户气泡，真实消息落库后由轮询无缝替换
+function addOptimisticMsg(payload) {
+  const box = $("msgList");
+  const el = document.createElement("div");
+  el.className = "msg user optimistic";
+  const attach = payload.image || payload.file;
+  const attachName = attach ? String(attach).split(/[\\/]/).pop() : "";
+  const attachHtml = attachName
+    ? `<div style="font-size:12.5px;opacity:.85;margin-bottom:4px">${payload.image ? "🖼️" : "📎"} ${escapeHtml(attachName)}</div>` : "";
+  el.innerHTML = `<div class="who">你 · 发送中…</div>` +
+    `<div class="bubble" style="white-space:pre-wrap;opacity:.8">${attachHtml}${escapeHtml(payload.text || "")}</div>`;
+  box.appendChild(el);
+  scrollBottom(true);
+  return el;
+}
+function clearOptimistic(count) {
+  const list = Array.from($("msgList").querySelectorAll(".msg.optimistic"));
+  const n = count === undefined ? list.length : Math.min(count, list.length);
+  for (let i = 0; i < n; i++) list[i].remove();
+}
 async function sendPayload(payload) {
+  const sid = state.current;
+  const optEl = payload._optEl || (sid ? addOptimisticMsg(payload) : null);
+  delete payload._optEl;
   try {
-    const res = await api(`/api/sessions/${encodeURIComponent(state.current)}/send`, {
+    const res = await api(`/api/sessions/${encodeURIComponent(sid)}/send`, {
       method: "POST", body: payload,
     });
-    trackJob(res.job_id, state.current);
+    trackJob(res.job_id, sid);
     scrollBottom(true);
     setTimeout(pollNewMessages, 1200);
     return true;
   } catch (e) {
-    alert(e.message);
+    if (optEl) optEl.remove();
+    toast(e.message);
     return false;
   }
 }
@@ -1688,9 +1820,10 @@ async function sendCurrent() {
     if (pending.is_image) payload.image = pending.path;
     else payload.file = pending.path;
   }
-  // 会话还在创建中：暂存，创建完成后自动发送
+  // 会话还在创建中：立即乐观上屏并暂存，创建完成后自动发送
   if (!state.current) {
     if (state.creatingSession) {
+      payload._optEl = addOptimisticMsg(payload);
       state.pendingAfterCreate = state.pendingAfterCreate || [];
       state.pendingAfterCreate.push(payload);
       $("msgInput").value = ""; autoGrow();
@@ -1737,7 +1870,7 @@ $("renameBtn").onclick = async () => {
       {method: "POST", body: {title: title.trim()}});
     $("chatTitle").textContent = title.trim();
     loadSessions();
-  } catch (e) { alert(e.message); }
+  } catch (e) { toast(e.message); }
 };
 
 // ---------- 启动与视口管理 ----------
@@ -1778,6 +1911,20 @@ document.addEventListener("focusout", (e) => {
       resetWindowScroll();
       setAppH();
     }, 60);
+  }
+});
+
+// ---------- 安卓系统返回手势 / 物理返回键：逐层返回（预览 → 聊天 → 列表） ----------
+window.addEventListener("popstate", () => {
+  if (_ignorePopCount > 0) { _ignorePopCount--; return; }
+  const pv = document.getElementById("pvOverlay");
+  if (pv && !pv.hidden) {
+    closePreviewOverlay(true);
+    return;
+  }
+  if (state.current || state.creatingSession) {
+    _hasChatHistory = false;   // 该历史项已被系统弹出，backBtn 不再重复 history.back()
+    $("backBtn").click();
   }
 });
 
@@ -2065,7 +2212,7 @@ async function switchSession(kind, body, onOk) {
     trackJob(res.job_id, state.current, {
       onDone: (job) => { if (job.status === "done") onOk && onOk(); },
     });
-  } catch (e) { alert(e.message); }
+  } catch (e) { toast(e.message); }
 }
 
 // ---------- 主页输入框：直接新建会话 ----------
@@ -2096,7 +2243,7 @@ async function homeSend() {
   try {
     res = await api("/api/conversations", { method: "POST", body: payload });
   } catch (e) {
-    alert(e.message);
+    toast(e.message);
   }
   state.submitting = false;
   $("homeSendBtn").disabled = false;
@@ -2108,7 +2255,7 @@ async function homeSend() {
   if (state.homeClearAttach) state.homeClearAttach();
   state.homeCancelled = false;
   state.creatingSession = true;
-  showCreating();
+  showCreating(payload);
   trackJob(res.job_id, null, {
     jump: true,
     onDone: () => { loadSessions().catch(() => {}); },
@@ -2116,8 +2263,8 @@ async function homeSend() {
 }
 $("homeSendBtn").onclick = homeSend;
 
-// 新建会话期间的占位对话窗：立即跳转，内容稍后填入
-function showCreating() {
+// 新建会话期间的占位对话窗：立即跳转并展示用户刚发出的消息气泡，内容稍后填入
+function showCreating(payload) {
   stopPolling();
   state.current = null;
   state.msgs = [];
@@ -2128,9 +2275,11 @@ function showCreating() {
   $("msgs").style.display = "block";
   $("msgList").innerHTML =
     '<div class="msg system"><div class="bubble">⏳ Hermes 正在创建会话并发送…</div></div>';
+  if (payload) addOptimisticMsg(payload);
   $("inputBar").style.display = "flex";
   $("list").classList.add("hide");
   updateActiveItem(null);
+  pushChatHistory();
 }
 const homeInput = $("homeInput");
 function autoGrowHome() {
@@ -2158,6 +2307,9 @@ function setupUploader(opts) {
     uploadSeq++;
     state[stateProp] = null;
     preview.style.display = "none";
+    if (thumb.src && thumb.src.startsWith("blob:")) {
+      try { URL.revokeObjectURL(thumb.src); } catch (_) {}
+    }
     thumb.src = "";
     thumb.style.display = "none";
     fileIcon.style.display = "none";
@@ -2172,10 +2324,13 @@ function setupUploader(opts) {
     if (!file) return;
     const curSeq = ++uploadSeq;
     if (file.size > 30 * 1024 * 1024) {
-      alert("文件大小超过 30MB 限制");
+      toast("文件大小超过 30MB 限制");
       return;
     }
     const isImg = file.type.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name);
+    if (thumb.src && thumb.src.startsWith("blob:")) {
+      try { URL.revokeObjectURL(thumb.src); } catch (_) {}
+    }
     if (isImg) {
       thumb.src = URL.createObjectURL(file);
       thumb.style.display = "block";
@@ -2194,7 +2349,7 @@ function setupUploader(opts) {
     const reader = new FileReader();
     reader.onerror = () => {
       if (curSeq !== uploadSeq) return;
-      alert("读取文件失败");
+      toast("读取文件失败");
       clearAttach();
     };
     reader.onload = async () => {
@@ -2222,7 +2377,7 @@ function setupUploader(opts) {
         }
       } catch (err) {
         if (curSeq !== uploadSeq) return;
-        alert("附件上传失败：" + (err.message || err));
+        toast("附件上传失败：" + (err.message || err));
         clearAttach();
       }
     };
@@ -2291,6 +2446,37 @@ state.homeClearAttach = setupUploader({
   stateProp: "homePendingAttach",
   sendBtn: $("homeSendBtn"),
 });
+
+// ---------- PWA：添加到桌面 + Service Worker ----------
+(function initPwa() {
+  const btn = $("installBtn");
+  const standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches)
+    || navigator.standalone === true;
+  let deferred = null;
+  if (btn && !standalone && navigator.maxTouchPoints > 0) btn.style.display = "inline-flex";
+  window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferred = e; });
+  window.addEventListener("appinstalled", () => {
+    deferred = null;
+    if (btn) btn.style.display = "none";
+    toast("✅ 已添加到桌面");
+  });
+  if (btn) btn.onclick = async () => {
+    if (deferred) {   // Chrome / Edge 等：直接弹系统安装框
+      deferred.prompt();
+      try { await deferred.userChoice; } catch (_) {}
+      deferred = null;
+      return;
+    }
+    // 国产自带浏览器等不提供安装接口：给出手动添加指引
+    toast("请点浏览器菜单（⋮ 或 ≡）→「添加到桌面 / 添加到主屏幕」。\nEdge：菜单 →「添加到手机」→「手机主屏幕」", 9000);
+  };
+  if ("serviceWorker" in navigator &&
+      (location.protocol === "https:" || /^(localhost|127\.0\.0\.1)$/.test(location.hostname))) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+})();
 
 tryAutoLogin();
 </script>

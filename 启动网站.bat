@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================================
-rem  Hermes Web Remote - 全自动自适应启动脚本 (集成 Tailscale 穿透与凭据自动配置)
+rem  Hermes Web Remote - 全自动自适应启动脚本 (Tailscale 穿透 + 凭据直显 + 守护)
 rem ============================================================================
 chcp 936 >nul
 cd /d "%~dp0"
@@ -32,11 +32,7 @@ if exist "%~dp0.env" (
 set "HERMES_WEB_USER=%WEB_USER%"
 set "HERMES_WEB_PASSWORD=%WEB_PASS%"
 
-echo [1/3] 正在检查端口占用情况...
-netstat -ano 2>nul | findstr ":9220 " | findstr "LISTENING" >nul
-if not errorlevel 1 goto :already_running
-
-echo [2/3] 正在自动探测 Python 运行环境...
+echo [1/4] 正在自动探测 Python 运行环境...
 set PY_EXE=
 
 rem 1. 探测系统 PATH 中的 pythonw
@@ -93,20 +89,24 @@ if errorlevel 1 set "PY_EXE=%~1"
 exit /b 0
 
 :found_python
-echo [3/3] 检测到 Python 核心: %PY_EXE%
-echo 正在后台静默拉起 server.py...
-start "" "%PY_EXE%" "%~dp0server.py"
+echo [2/4] 检测到 Python 核心: %PY_EXE%
+echo [3/4] 正在检查端口占用情况...
+netstat -ano 2>nul | findstr ":9220 " | findstr "LISTENING" >nul
+if not errorlevel 1 goto :already_running
 
-rem 等待 2 秒验活
+echo [4/4] 正在后台静默拉起 server.py 与守护看门狗...
+start "" "%PY_EXE%" "%~dp0server.py"
 ping -n 3 127.0.0.1 >nul
 netstat -ano 2>nul | findstr ":9220 " | findstr "LISTENING" >nul
 if errorlevel 1 goto :start_warn
 
+start "" "%PY_EXE%" "%~dp0watchdog.py"
 goto :show_success
 
 :already_running
 echo.
 echo [提示] Hermes 远程 Web 服务已经在运行中 [端口: 9220]
+start "" "%PY_EXE%" "%~dp0watchdog.py"
 
 :show_success
 rem 探测并配置 Tailscale 自动穿透
